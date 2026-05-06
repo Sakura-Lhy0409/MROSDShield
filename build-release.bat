@@ -23,6 +23,8 @@ copy /y "%~dp0LICENSE" "%STAGE%\MROSDShield\" >nul
 copy /y "%~dp0compile.bat" "%STAGE%\MROSDShield\" >nul
 copy /y "%~dp0build-release.bat" "%STAGE%\MROSDShield\" >nul
 copy /y "%~dp0Shield.cs" "%STAGE%\MROSDShield\" >nul
+xcopy /e /i /y "%~dp0src" "%STAGE%\MROSDShield\src" >nul
+xcopy /e /i /y "%~dp0tools" "%STAGE%\MROSDShield\tools" >nul
 
 if exist "%PKG%" del /f /q "%PKG%"
 

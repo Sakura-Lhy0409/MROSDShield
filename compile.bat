@@ -9,12 +9,19 @@ if not exist "%CSC%" (
     exit /b 1
 )
 
-"%CSC%" /target:winexe /out:MR_OSD_Shield.exe /platform:anycpu /optimize+ /nologo /reference:System.ServiceProcess.dll /reference:System.Drawing.dll /reference:System.Windows.Forms.dll Shield.cs
+set "SRC_LIST=%TEMP%\mrosdshield_sources_%RANDOM%.txt"
+if exist "%SRC_LIST%" del /f /q "%SRC_LIST%"
 
-if errorlevel 1 (
+for /r "%~dp0src" %%F in (*.cs) do echo "%%F" >> "%SRC_LIST%"
+
+"%CSC%" /target:winexe /out:MR_OSD_Shield.exe /platform:anycpu /optimize+ /nologo /reference:System.ServiceProcess.dll /reference:System.Drawing.dll /reference:System.Windows.Forms.dll @"%SRC_LIST%"
+set "BUILD_ERROR=%ERRORLEVEL%"
+if exist "%SRC_LIST%" del /f /q "%SRC_LIST%"
+
+if not "%BUILD_ERROR%"=="0" (
     echo FAILED
     if /i "%1" neq "--no-pause" pause
-    exit /b 1
+    exit /b %BUILD_ERROR%
 )
 
 echo SUCCESS: %~dp0MR_OSD_Shield.exe

@@ -641,8 +641,13 @@ compile.bat --no-pause
 手动编译命令：
 
 ```batch
-C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /out:MR_OSD_Shield.exe /platform:anycpu /optimize+ /nologo /reference:System.ServiceProcess.dll /reference:System.Drawing.dll /reference:System.Windows.Forms.dll Shield.cs
+C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /out:MR_OSD_Shield.exe /platform:anycpu /optimize+ /nologo /reference:System.ServiceProcess.dll /reference:System.Drawing.dll /reference:System.Windows.Forms.dll @src_files.txt
 ```
+
+说明：
+
+- `compile.bat` 会自动扫描 `src/` 下所有 `.cs` 文件并生成临时编译列表
+- 当前源码已经拆分为后端逻辑、前端 UI 和基础设施三个部分
 
 ---
 
@@ -656,9 +661,9 @@ build-release.bat
 
 会自动：
 
-1. 编译 `Shield.cs`
+1. 编译 `src/` 下所有源码
 2. 创建临时发布目录
-3. 复制程序和源码文件
+3. 复制程序、README、LICENSE、编译脚本、`src/` 和 `tools/`
 4. 使用 PowerShell `Compress-Archive` 打包
 5. 在项目上级目录生成发布包
 
@@ -779,12 +784,32 @@ logs/crash.log
 ```text
 MROSDShield/
 ├── MR_OSD_Shield.exe          主程序
-├── Shield.cs                  源代码
-├── compile.bat                编译脚本
-├── build-release.bat          发布打包脚本
 ├── README.md                  项目说明
 ├── LICENSE                    开源协议
+├── compile.bat                编译脚本
+├── build-release.bat          发布打包脚本
+├── Shield.cs                  迁移说明，旧单文件入口已废弃
 ├── settings.ini               用户设置，运行后自动生成
+├── src/                       当前源码目录
+│   ├── App.cs
+│   ├── AppInfo.cs
+│   ├── Program.cs
+│   ├── Backend/
+│   │   ├── AutoStart.cs
+│   │   ├── Engine.cs
+│   │   └── Preferences.cs
+│   ├── Frontend/
+│   │   ├── MainForm.cs
+│   │   └── Controls/
+│   │       ├── GlowCard.cs
+│   │       └── ToggleSwitch.cs
+│   └── Infrastructure/
+│       ├── Localization.cs
+│       ├── Log.cs
+│       └── ThemeColors.cs
+├── tools/
+│   ├── split_source.ps1
+│   └── split_source.py
 └── logs/                      日志目录，运行后自动生成
     ├── mr_osd_shield.log      运行日志
     ├── mr_osd_shield.old.log  轮转日志
