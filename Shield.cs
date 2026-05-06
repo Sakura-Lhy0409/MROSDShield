@@ -13,6 +13,12 @@ using System.Windows.Forms;
 
 namespace MROSDShield
 {
+    static class AppInfo
+    {
+        public const string Version = "1.0.2";
+        public const string PackageName = "MROSDShield-v1.0.2.zip";
+    }
+
     static class Program
     {
         [DllImport("user32.dll")]
@@ -35,7 +41,7 @@ namespace MROSDShield
                 Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
                 Application.ThreadException += (s, e) => LogCrash(e.Exception);
                 AppDomain.CurrentDomain.UnhandledException += (s, e) => LogCrash(e.ExceptionObject as Exception);
-                Log.Info("Application starting. Args=" + string.Join(" ", args) + ", Admin=" + IsAdmin());
+                Log.Info("Application starting. Version=" + AppInfo.Version + ", Args=" + string.Join(" ", args) + ", Admin=" + IsAdmin());
                 new App().Run(args.Length > 0 && args[0] == "--minimized");
             }
             catch (Exception ex)
@@ -159,6 +165,7 @@ namespace MROSDShield
         public static void Toggle() { _forceZh = !Zh; }
         static string S(string zh, string en) { return Zh ? zh : en; }
         public static string T { get { return "MR OSD Shield"; } }
+        public static string TV { get { return "MR OSD Shield v" + AppInfo.Version; } }
         public static string Sub { get { return S("机械革命 GPU 控制防护", "MECHREVO GPU Control Shield"); } }
         public static string Home { get { return S("首页", "Home"); } }
         public static string Stat { get { return S("统计", "Stats"); } }
@@ -206,6 +213,12 @@ namespace MROSDShield
         public static string AdminOK { get { return S("已启用", "Enabled"); } }
         public static string AdminNO { get { return S("未启用，部分功能可能失败", "Not enabled, some features may fail"); } }
         public static string RestartAdmin { get { return S("以管理员身份重启", "Restart as Admin"); } }
+        public static string OpenLogDir { get { return S("打开日志目录", "Open Logs"); } }
+        public static string OpenAppDir { get { return S("打开程序目录", "Open Folder"); } }
+        public static string ApplyAB { get { return S("重应用小飞机配置", "Apply AB Profile"); } }
+        public static string RepairNow { get { return S("立即执行防护修复", "Repair Now"); } }
+        public static string ABProfile { get { return S("小飞机 Profile", "AB Profile"); } }
+        public static string Choose { get { return S("选择", "Choose"); } }
     }
 
     static class Co
@@ -233,6 +246,7 @@ namespace MROSDShield
         string _abPath, _ccBase, _hwoc, _mainopt;
         System.Threading.Timer _tmr;
         volatile bool _run, _done, _ready, _ccFS;
+        int _quietTicks;
         readonly object _statusLock = new object();
         StatusInfo _lastStatus = new StatusInfo();
         int _ticking;
@@ -275,6 +289,36 @@ namespace MROSDShield
             if (_tmr != null) { _tmr.Dispose(); _tmr = null; }
         }
 
+        public void SetAfterburnerPath(string path)
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(path) && File.Exists(path))
+                {
+                    Pref.AfterburnerPath = path;
+                    _abPath = path;
+                    Log.Info("Custom MSI Afterburner path set: " + path);
+                }
+            }
+            catch (Exception ex) { Log.Error("Set MSI Afterburner path failed.", ex); }
+        }
+
+        public void SetControlCenterPath(string path)
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(path) && Directory.Exists(path))
+                {
+                    Pref.ControlCenterPath = path;
+                    _ccBase = path;
+                    _hwoc = Path.Combine(_ccBase, "AiStoneService", "MyControlCenter", "LiquidHWOC", "LiquidHWOC.json");
+                    _mainopt = Path.Combine(_ccBase, "AiStoneService", "MyControlCenter", "UserPofiles", "MainOption.json");
+                    Log.Info("Custom control center path set: " + path);
+                }
+            }
+            catch (Exception ex) { Log.Error("Set control center path failed.", ex); }
+        }
+
         bool CCUp()
         {
             try { using (var sc = new ServiceController("GCUBridge")) return sc.Status == ServiceControllerStatus.Running; }
@@ -313,10 +357,26 @@ namespace MROSDShield
                 }
 
                 int k = Kill();
-                if (k > 0) { Blocked += k; TotalBlocked += k; SessionKills += k; Log.Info("Blocked GPU control processes. Count=" + k); }
+                if (k > 0)
+                {
+                    _quietTicks = 0;
+                    Blocked += k; TotalBlocked += k; SessionKills += k; Log.Info("Blocked GPU control processes. Count=" + k);
+                    ChangeInterval(650);
+                }
+                else
+                {
+                    _quietTicks++;
+                    if (_quietTicks > 460) ChangeInterval(2500);
+                    else if (_quietTicks > 90) ChangeInterval(1500);
+                }
                 UpdateStatusCache();
             }
             finally { Interlocked.Exchange(ref _ticking, 0); }
+        }
+
+        void ChangeInterval(int ms)
+        {
+            try { if (_tmr != null) _tmr.Change(ms, ms); } catch { }
         }
 
         int Kill()
@@ -326,13 +386,37 @@ namespace MROSDShield
                 foreach (var p in Process.GetProcessesByName(name))
                 {
                     try { p.Kill(); n++; }
-                    catch { }
+                    catch (Exception ex) { Log.Error("Kill process failed: " + name, ex); }
                     finally { p.Dispose(); }
                 }
             return n;
         }
 
         bool Zero(string path, string[] keys)
+        {
+            return ZeroFile(path, keys);
+        }
+
+        public void RepairNow()
+        {
+            try
+            {
+                int k = Kill();
+                if (k > 0) { Blocked += k; TotalBlocked += k; SessionKills += k; }
+                if (_hwoc != null && ZeroFile(_hwoc, new[] { "CoreFreqOffset", "MemFreqOffset", "HWOCEnable" })) FileResets++;
+                if (_mainopt != null && ZeroFile(_mainopt, new[] { "TurboGPUOCOffset", "TurboSilentGPUOCOffset" })) FileResets++;
+                UpdateStatusCache();
+                Log.Info("Manual repair executed. Kills=" + k);
+            }
+            catch (Exception ex) { Log.Error("Manual repair failed.", ex); }
+        }
+
+        public void ApplyAfterburnerProfile()
+        {
+            ReapplyAB();
+        }
+
+        bool ZeroFile(string path, string[] keys)
         {
             try
             {
@@ -347,18 +431,43 @@ namespace MROSDShield
                     int vs = c + 1; while (vs < j.Length && char.IsWhiteSpace(j[vs])) vs++;
                     int ve = vs; while (ve < j.Length && j[ve] != ',' && j[ve] != '\n' && j[ve] != '}') ve++;
                     string ov = j.Substring(vs, ve - vs).Trim();
-                    string nv = (ov.IndexOf("true", StringComparison.OrdinalIgnoreCase) >= 0 || ov.IndexOf("false", StringComparison.OrdinalIgnoreCase) >= 0) ? "false" : "0";
+                    bool isBool = ov.Equals("true", StringComparison.OrdinalIgnoreCase) || ov.Equals("false", StringComparison.OrdinalIgnoreCase);
+                    bool isNum;
+                    double dummy;
+                    isNum = double.TryParse(ov, System.Globalization.NumberStyles.Float, CultureInfo.InvariantCulture, out dummy);
+                    if (!isBool && !isNum)
+                    {
+                        Log.Info("Skip non numeric/bool config value. Path=" + path + ", Key=" + k + ", Value=" + ov);
+                        continue;
+                    }
+                    string nv = isBool ? "false" : "0";
+                    if (ov == nv) continue;
                     j = j.Substring(0, vs) + nv + j.Substring(ve);
                     ch = true;
                 }
                 if (ch)
                 {
+                    BackupConfig(path);
                     File.WriteAllText(path, j, Encoding.UTF8);
                     Log.Info("Config reset: " + path);
                 }
                 return ch;
             }
-            catch { return false; }
+            catch (Exception ex) { Log.Error("Config reset failed: " + path, ex); return false; }
+        }
+
+        void BackupConfig(string path)
+        {
+            try
+            {
+                string bak = path + ".mrosd.bak";
+                if (!File.Exists(bak))
+                {
+                    File.Copy(path, bak, false);
+                    Log.Info("Backup created: " + bak);
+                }
+            }
+            catch (Exception ex) { Log.Error("Backup config failed: " + path, ex); }
         }
 
         void ReapplyAB()
@@ -368,16 +477,18 @@ namespace MROSDShield
                 if (_abPath == null || !File.Exists(_abPath)) _abPath = FindAB();
                 if (_abPath != null)
                 {
-                    Log.Info("Reapply MSI Afterburner profile1: " + _abPath);
-                    var p = Process.Start(new ProcessStartInfo(_abPath, "-profile1") { CreateNoWindow = true, UseShellExecute = false });
+                    string profileArg = "-profile" + Pref.AfterburnerProfile;
+                    Log.Info("Reapply MSI Afterburner " + profileArg + ": " + _abPath);
+                    var p = Process.Start(new ProcessStartInfo(_abPath, profileArg) { CreateNoWindow = true, UseShellExecute = false });
                     if (p != null) p.WaitForExit(1200);
                 }
             }
-            catch { }
+            catch (Exception ex) { Log.Error("Reapply MSI Afterburner profile failed.", ex); }
         }
 
         string FindCC()
         {
+            if (Pref.ControlCenterPath.Length > 0 && Directory.Exists(Pref.ControlCenterPath)) return Pref.ControlCenterPath;
             string[] sp = { @"C:\Program Files\OEM\机械革命控制中心", @"D:\Program Files\OEM\机械革命控制中心", @"C:\Program Files (x86)\OEM\机械革命控制中心" };
             foreach (var p in sp) if (Directory.Exists(p)) return p;
             try
@@ -395,6 +506,7 @@ namespace MROSDShield
 
         string FindAB()
         {
+            if (Pref.AfterburnerPath.Length > 0 && File.Exists(Pref.AfterburnerPath)) return Pref.AfterburnerPath;
             string[] sp = { @"C:\Program Files (x86)\MSI Afterburner\MSIAfterburner.exe", @"C:\Program Files\MSI Afterburner\MSIAfterburner.exe", @"D:\Program Files (x86)\MSI Afterburner\MSIAfterburner.exe" };
             foreach (var p in sp) if (File.Exists(p)) return p;
             try
@@ -503,6 +615,29 @@ namespace MROSDShield
         {
             get { return !ReadValue("MinToTray", "true").Equals("false", StringComparison.OrdinalIgnoreCase); }
             set { WriteValue("MinToTray", value ? "true" : "false"); }
+        }
+
+        public static string AfterburnerPath
+        {
+            get { return ReadValue("AfterburnerPath", ""); }
+            set { WriteValue("AfterburnerPath", value ?? ""); }
+        }
+
+        public static string ControlCenterPath
+        {
+            get { return ReadValue("ControlCenterPath", ""); }
+            set { WriteValue("ControlCenterPath", value ?? ""); }
+        }
+
+        public static int AfterburnerProfile
+        {
+            get
+            {
+                int v;
+                if (!int.TryParse(ReadValue("AfterburnerProfile", "1"), out v)) v = 1;
+                return Math.Max(1, Math.Min(5, v));
+            }
+            set { WriteValue("AfterburnerProfile", Math.Max(1, Math.Min(5, value)).ToString()); }
         }
 
         public static int StableSeconds
@@ -724,14 +859,14 @@ namespace MROSDShield
         Panel _content;
         Label _navHome, _navStat, _navSet, _heroTitle, _heroSub, _statusChip;
         GlowCard _hero;
-        Label _svcVal, _gcuVal, _gcuuVal, _sesVal, _totVal, _upVal, _waitVal, _adminVal;
+        Label _svcVal, _gcuVal, _gcuuVal, _sesVal, _totVal, _upVal, _waitVal, _adminVal, _profileVal;
         Label _statKills, _statResets, _statUp, _statAvg;
 
         public MainForm(Engine e, bool startMinimized)
         {
             _e = e;
             _startMinimized = startMinimized;
-            Text = L.T;
+            Text = L.TV;
             Size = new Size(980, 700);
             MinimumSize = MaximumSize = Size;
             FormBorderStyle = FormBorderStyle.None;
@@ -813,7 +948,7 @@ namespace MROSDShield
         {
             var topLogo = new Label { Text = "G", Font = new Font("Segoe UI", 12f, FontStyle.Bold), ForeColor = Co.Txt, BackColor = Color.Transparent, TextAlign = ContentAlignment.MiddleCenter, Size = new Size(28, 28), Location = new Point(24, 10) };
             Controls.Add(topLogo);
-            Controls.Add(new Label { Text = L.T, Font = new Font("Segoe UI", 12.5f), ForeColor = Co.Txt, BackColor = Color.Transparent, AutoSize = true, Location = new Point(70, 13) });
+            Controls.Add(new Label { Text = L.TV, Font = new Font("Segoe UI", 12.5f), ForeColor = Co.Txt, BackColor = Color.Transparent, AutoSize = true, Location = new Point(70, 13) });
             _statusChip = new Label { Text = L.TD, Font = new Font("Segoe UI", 8f, FontStyle.Bold), ForeColor = Co.Blue, BackColor = Color.Transparent, TextAlign = ContentAlignment.MiddleCenter, AutoEllipsis = true, Size = new Size(210, 26), Location = new Point(610, 11) };
             _statusChip.Paint += (s, e) =>
             {
@@ -974,7 +1109,14 @@ namespace MROSDShield
         {
             Header(L.Set, L.Sub);
             PathCard(L.AB, _e.ABPath, 76, Co.Green);
+            var abChoose = Pill(L.Choose, new Point(570, 92), new Size(120, 32), Co.Green);
+            abChoose.Click += (s, e) => ChooseAfterburnerPath();
+            _content.Controls.Add(abChoose);
+            ProfileRow(new Point(570, 128));
             PathCard(L.CCP, _e.CCPath, 158, Co.Blue);
+            var ccChoose = Pill(L.Choose, new Point(570, 174), new Size(120, 32), Co.Blue);
+            ccChoose.Click += (s, e) => ChooseControlCenterPath();
+            _content.Controls.Add(ccChoose);
             var c = new GlowCard { Title = L.Quick, Accent = Co.Purple, Size = new Size(548, 194), Location = new Point(0, 252) };
             _content.Controls.Add(c);
             SettingRow(c, L.AS, 42, AS.On(), (v) => { if (v) AS.Enable(); else AS.Disable(); });
@@ -982,6 +1124,18 @@ namespace MROSDShield
             WaitRow(c, 114);
             SettingRow(c, L.MT, 154, _minToTray, (v) => { _minToTray = v; Pref.MinToTray = v; });
             PathCard(L.Log, Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), "logs", "mr_osd_shield.log"), 468, Co.Amber);
+            var b1 = Pill(L.OpenLogDir, new Point(570, 468), new Size(120, 32), Co.Amber);
+            b1.Click += (s, e) => OpenFolder(Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), "logs"));
+            _content.Controls.Add(b1);
+            var b2 = Pill(L.OpenAppDir, new Point(700, 468), new Size(120, 32), Co.Blue);
+            b2.Click += (s, e) => OpenFolder(Path.GetDirectoryName(Application.ExecutablePath));
+            _content.Controls.Add(b2);
+            var b3 = Pill(L.ApplyAB, new Point(570, 510), new Size(120, 32), Co.Green);
+            b3.Click += (s, e) => _e.ApplyAfterburnerProfile();
+            _content.Controls.Add(b3);
+            var b4 = Pill(L.RepairNow, new Point(700, 510), new Size(120, 32), Co.Red);
+            b4.Click += (s, e) => _e.RepairNow();
+            _content.Controls.Add(b4);
         }
 
         void Header(string title, string sub)
@@ -1003,6 +1157,73 @@ namespace MROSDShield
             var c = new GlowCard { Title = title, Accent = accent, Size = new Size(548, 66), Location = new Point(0, y) };
             _content.Controls.Add(c);
             c.Controls.Add(new Label { Text = path.Length > 0 ? path : L.NF, Font = new Font("Consolas", 8.5f), ForeColor = path.Length > 0 ? Co.Txt : Co.Red, BackColor = Color.Transparent, AutoEllipsis = true, Size = new Size(500, 22), Location = new Point(22, 34) });
+        }
+
+        void OpenFolder(string path)
+        {
+            try
+            {
+                Directory.CreateDirectory(path);
+                Process.Start("explorer.exe", "\"" + path + "\"");
+            }
+            catch (Exception ex) { Log.Error("Open folder failed: " + path, ex); }
+        }
+
+        void ProfileRow(Point loc)
+        {
+            _content.Controls.Add(new Label { Text = L.ABProfile, Font = new Font("Microsoft YaHei UI", 8.5f), ForeColor = Co.Dim, BackColor = Co.BG, AutoEllipsis = true, Size = new Size(120, 20), Location = loc });
+            var minus = MiniButton("-", new Point(loc.X + 126, loc.Y - 2));
+            minus.Click += (s, e) => { Pref.AfterburnerProfile = Pref.AfterburnerProfile - 1; UpdateProfileText(); };
+            _content.Controls.Add(minus);
+            _profileVal = new Label { Text = "", Font = new Font("Consolas", 10f, FontStyle.Bold), ForeColor = Co.Green, BackColor = Co.BG, TextAlign = ContentAlignment.MiddleCenter, Size = new Size(34, 24), Location = new Point(loc.X + 158, loc.Y - 2) };
+            _content.Controls.Add(_profileVal);
+            var plus = MiniButton("+", new Point(loc.X + 194, loc.Y - 2));
+            plus.Click += (s, e) => { Pref.AfterburnerProfile = Pref.AfterburnerProfile + 1; UpdateProfileText(); };
+            _content.Controls.Add(plus);
+            UpdateProfileText();
+        }
+
+        void UpdateProfileText()
+        {
+            if (_profileVal != null) _profileVal.Text = Pref.AfterburnerProfile.ToString();
+        }
+
+        void ChooseAfterburnerPath()
+        {
+            try
+            {
+                using (var d = new OpenFileDialog())
+                {
+                    d.Title = L.AB;
+                    d.Filter = "MSIAfterburner.exe|MSIAfterburner.exe|Executable files (*.exe)|*.exe|All files (*.*)|*.*";
+                    d.FileName = "MSIAfterburner.exe";
+                    if (_e.ABPath.Length > 0 && File.Exists(_e.ABPath)) d.InitialDirectory = Path.GetDirectoryName(_e.ABPath);
+                    if (d.ShowDialog(this) == DialogResult.OK)
+                    {
+                        _e.SetAfterburnerPath(d.FileName);
+                        ShowPage(2);
+                    }
+                }
+            }
+            catch (Exception ex) { Log.Error("Choose MSI Afterburner path failed.", ex); }
+        }
+
+        void ChooseControlCenterPath()
+        {
+            try
+            {
+                using (var d = new FolderBrowserDialog())
+                {
+                    d.Description = L.CCP;
+                    if (_e.CCPath.Length > 0 && Directory.Exists(_e.CCPath)) d.SelectedPath = _e.CCPath;
+                    if (d.ShowDialog(this) == DialogResult.OK)
+                    {
+                        _e.SetControlCenterPath(d.SelectedPath);
+                        ShowPage(2);
+                    }
+                }
+            }
+            catch (Exception ex) { Log.Error("Choose control center path failed.", ex); }
         }
 
         void SettingRow(Control parent, string text, int y, bool on, Action<bool> changed)
@@ -1085,6 +1306,12 @@ namespace MROSDShield
 
                 if (!Visible && _ui.Interval != 5000) _ui.Interval = 5000;
                 else if (Visible && _ui.Interval != 1000) _ui.Interval = 1000;
+                if (!Visible)
+                {
+                    RefreshTray(st);
+                    MaybeTrim();
+                    return;
+                }
                 if (_page == 0)
                 {
                     bool active = _e.Active;
@@ -1110,31 +1337,38 @@ namespace MROSDShield
                     _statAvg.Text = hrs > 0 ? (st.Total / hrs).ToString("F1") : "0.0";
                 }
 
-                if ((DateTime.Now - _lastTrim).TotalSeconds >= 30)
-                {
-                    _lastTrim = DateTime.Now;
-                    if (!Visible || WindowState == FormWindowState.Minimized) Program.TrimMemory();
-                }
-
-                if (_tray != null)
-                {
-                    int ns = !_e.Active ? 0 : st.AllOK ? 1 : 2;
-                    string txt = ns == 0 ? L.TD : ns == 1 ? L.TP : L.TW;
-                    if (_trayState != ns)
-                    {
-                        _trayState = ns;
-                        _tray.Icon = ns == 0 ? _icoBlue : ns == 1 ? _icoGreen : _icoRed;
-                        if (_statusChip != null)
-                        {
-                            _statusChip.Text = txt;
-                            _statusChip.ForeColor = ns == 0 ? Co.Blue : ns == 1 ? Co.Green : Co.Red;
-                            _statusChip.Invalidate();
-                        }
-                    }
-                    _tray.Text = txt;
-                }
+                MaybeTrim();
+                RefreshTray(st);
             }
             catch { }
+        }
+
+        void RefreshTray(StatusInfo st)
+        {
+            if (_tray == null) return;
+            int ns = !_e.Active ? 0 : st.AllOK ? 1 : 2;
+            string txt = ns == 0 ? L.TD : ns == 1 ? L.TP : L.TW;
+            if (_trayState != ns)
+            {
+                _trayState = ns;
+                _tray.Icon = ns == 0 ? _icoBlue : ns == 1 ? _icoGreen : _icoRed;
+                if (_statusChip != null)
+                {
+                    _statusChip.Text = txt;
+                    _statusChip.ForeColor = ns == 0 ? Co.Blue : ns == 1 ? Co.Green : Co.Red;
+                    _statusChip.Invalidate();
+                }
+            }
+            _tray.Text = txt;
+        }
+
+        void MaybeTrim()
+        {
+            if ((DateTime.Now - _lastTrim).TotalSeconds >= 180)
+            {
+                _lastTrim = DateTime.Now;
+                if (!Visible || WindowState == FormWindowState.Minimized) Program.TrimMemory();
+            }
         }
 
         void SetProc(Label l, StatusInfo st, string p)
@@ -1156,6 +1390,7 @@ namespace MROSDShield
             WindowState = FormWindowState.Normal;
             ShowInTaskbar = false;
             if (tip && _tray != null) _tray.ShowBalloonTip(1600, L.T, L.TT, ToolTipIcon.Info);
+            _lastTrim = DateTime.MinValue;
             Program.TrimMemory();
         }
 
