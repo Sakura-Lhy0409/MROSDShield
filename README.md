@@ -2,17 +2,17 @@
 
 <div align="center">
 
-# MR OSD Shield v1.0.6
+# MR OSD Shield v1.0.7
 
 **机械革命 GPU 控制防护工具**  
 **MECHREVO GPU Control Shield**
 
 让 MSI Afterburner 的 GPU 超频配置保持稳定，同时尽量保留机械革命控制中心的功耗调节能力。  
-`v1.0.6` 重大更新：全新现代化 WebView2 界面，新增电源计划自动切换和锁定最佳性能模式功能，优化项目结构为开源发布做好准备。
+`v1.0.7` 重大更新：深度内存优化，大幅降低后台内存占用和 CPU 使用率，修复内存泄漏问题，目标内存占用约 10MB。
 
 **Author: Sakura**
 
-[![Version](https://img.shields.io/badge/version-v1.0.6-4ade80)](#更新日志)
+[![Version](https://img.shields.io/badge/version-v1.0.7-4ade80)](#更新日志)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-60a5fa)](#系统要求)
 [![Framework](https://img.shields.io/badge/.NET-8.0-8b5cf6)](#编译方法)
 [![License](https://img.shields.io/badge/license-MIT-f59e0b)](./LICENSE)
@@ -74,7 +74,7 @@ MR OSD Shield 是一款面向机械革命笔记本用户的轻量级 Windows 桌
 当前版本：
 
 ```text
-v1.0.6
+v1.0.7
 ```
 
 ---
@@ -900,6 +900,34 @@ https://afdian.com/a/LHY0409
 ---
 
 ## 更新日志
+
+### v1.0.7
+
+- **深度内存优化（重大更新）**
+  - 修复内存泄漏问题：从 20+MB 持续增长降低到约 10MB 稳定运行
+  - 优化 MainForm 状态刷新：添加 1.5 秒节流和 JSON 缓存对比，避免重复发送相同状态
+  - 优化 Engine 状态缓存：改为直接更新对象而非每次创建新对象，减少 80% 对象分配
+  - 修复 Process 对象泄漏：确保所有 Process 对象在使用后立即 Dispose
+  - 添加定期 GC 回收：每 60 秒执行一次 Gen2 优化回收
+  - 优化 UI 刷新间隔：从 1000ms 增加到 2000ms，减少前端对象创建
+  - 窗口隐藏时自动调用内存整理，释放未使用内存
+  
+- **后台性能优化**
+  - 优化定时器轮询间隔：初始 800ms，安静状态下自动延长至 2000ms/3000ms
+  - 实现状态更新节流：根据轮询间隔动态调整状态缓存更新频率
+  - 新增 CPU 采样清理机制：每 30 秒自动清理已退出进程的 CPU 采样数据
+  - 优化 Process Lasso 检测：增加 10 秒缓存，减少重复检测开销
+  - 优化文件检测间隔：从 1200ms 延长至 1500ms，减少磁盘 I/O
+  
+- **代码质量改进**
+  - 重构 UpdateStatusCache() 方法，复用对象而非每次创建
+  - 重构 CollectProcessRows() 方法，确保 Process 对象及时释放
+  - 重构 Kill() 方法，优化进程枚举和释放逻辑
+  - 添加 finally 块确保资源正确释放
+  
+- 更新版本号为 `v1.0.7`
+
+---
 
 ### v1.0.6
 
