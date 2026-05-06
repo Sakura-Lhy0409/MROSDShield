@@ -2,7 +2,7 @@
 setlocal
 cd /d "%~dp0"
 
-set "VERSION=1.0.3"
+set "VERSION=1.0.4"
 set "ROOT=%~dp0.."
 set "PKG=%ROOT%\MROSDShield-v%VERSION%.zip"
 set "STAGE=%TEMP%\MROSDShield-release-%VERSION%"
