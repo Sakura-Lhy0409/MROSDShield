@@ -1,0 +1,10 @@
+﻿2026-05-06 11:41:37 [INFO] Application starting. Args=, Admin=True
+2026-05-06 11:41:37 [INFO] App run. StartMinimized=False
+2026-05-06 11:41:37 [INFO] Engine started. CCPath=C:\Program Files\OEM\机械革命控制中心, ABPath=C:\Program Files (x86)\MSI Afterburner\MSIAfterburner.exe, StableSeconds=15
+2026-05-06 11:41:52 [INFO] GCUBridge stabilized. Protection is active.
+2026-05-06 11:41:52 [INFO] Reapply MSI Afterburner profile1: C:\Program Files (x86)\MSI Afterburner\MSIAfterburner.exe
+2026-05-06 11:41:53 [INFO] Blocked GPU control processes. Count=1
+2026-05-06 11:42:16 [INFO] Blocked GPU control processes. Count=1
+2026-05-06 11:42:46 [INFO] Blocked GPU control processes. Count=1
+2026-05-06 11:43:16 [INFO] Blocked GPU control processes. Count=1
+2026-05-06 11:43:25 [INFO] Application exited.
