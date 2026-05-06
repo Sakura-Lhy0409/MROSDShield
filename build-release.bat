@@ -19,6 +19,7 @@ mkdir "%STAGE%\MROSDShield"
 
 copy /y "%~dp0MR_OSD_Shield.exe" "%STAGE%\MROSDShield\" >nul
 copy /y "%~dp0README.md" "%STAGE%\MROSDShield\" >nul
+copy /y "%~dp0LICENSE" "%STAGE%\MROSDShield\" >nul
 copy /y "%~dp0compile.bat" "%STAGE%\MROSDShield\" >nul
 copy /y "%~dp0build-release.bat" "%STAGE%\MROSDShield\" >nul
 copy /y "%~dp0Shield.cs" "%STAGE%\MROSDShield\" >nul
