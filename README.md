@@ -14,7 +14,7 @@
 
 [![Version](https://img.shields.io/badge/version-v1.0.5-4ade80)](#更新日志)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-60a5fa)](#系统要求)
-[![Framework](https://img.shields.io/badge/.NET%20Framework-4.x-8b5cf6)](#编译方法)
+[![Framework](https://img.shields.io/badge/.NET-8.0-8b5cf6)](#编译方法)
 [![License](https://img.shields.io/badge/license-MIT-f59e0b)](./LICENSE)
 
 ---
@@ -491,18 +491,39 @@ KillGpuProcesses=false
 
 ## 系统要求
 
-- Windows 10 / 11
-- .NET Framework 4.x
-- 机械革命控制中心
-- MSI Afterburner，可选但推荐
-- 管理员权限，推荐
+### 最低配置
 
-说明：
+| 项目 | 要求 |
+|------|------|
+| **操作系统** | Windows 10 / Windows 11 |
+| **.NET 运行时** | .NET 8.0 Runtime（或 .NET Desktop Runtime 8.0） |
+| **WebView2** | Microsoft Edge WebView2 Runtime |
+| **权限** | 管理员权限（推荐） |
+| **硬盘空间** | 约 50 MB |
+| **内存** | 约 50-100 MB（运行时） |
 
-- 没有安装 MSI Afterburner 时，程序仍可运行。
-- 未找到 MSI Afterburner 时，会跳过自动重应用 Profile。
-- GPU 配置修复逻辑仍然生效。
-- 部分操作如创建任务计划、结束进程、写入控制中心配置可能需要管理员权限。
+### 软件依赖
+
+| 软件 | 必需性 | 说明 |
+|------|--------|------|
+| **机械革命控制中心** | 必需 | 程序监控的目标软件 |
+| **MSI Afterburner** | 推荐 | 不安装也可运行，但无法重应用 Profile |
+| **.NET 8.0 Runtime** | 必需 | [下载地址](https://dotnet.microsoft.com/download/dotnet/8.0) |
+| **WebView2 Runtime** | 必需 | Windows 11 自带，Windows 10 需手动安装 |
+
+### 硬件要求
+
+- **笔记本品牌**：机械革命（其他品牌未测试）
+- **显卡**：NVIDIA 独立显卡（支持 MSI Afterburner）
+- **处理器**：无特殊要求
+
+### 说明
+
+- 没有安装 MSI Afterburner 时，程序仍可运行
+- 未找到 MSI Afterburner 时，会跳过自动重应用 Profile
+- GPU 配置修复逻辑仍然生效
+- 部分操作如创建任务计划、结束进程、写入控制中心配置需要管理员权限
+- WebView2 Runtime 用于渲染程序界面，Windows 11 系统自带
 
 ---
 

@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MR OSD Shield</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand-mark">S</div>
+      <button class="nav-item active" data-page="home" title="首页">
+        <span>⌂</span>
+      </button>
+      <button class="nav-item" data-page="stats" title="统计">
+        <span>▥</span>
+      </button>
+      <button class="nav-item" data-page="settings" title="设置">
+        <span>⚙</span>
+      </button>
+      <div class="sidebar-footer">
+        <div class="author">Sakura</div>
+        <button id="langBtn" class="ghost-link">中文</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="titlebar">
+        <div>
+          <div class="app-title">MR OSD Shield</div>
+          <div class="app-subtitle">机械革命 GPU 控制防护工具</div>
+        </div>
+        <div class="title-actions">
+          <div id="statusBadge" class="status-badge detecting">检测中</div>
+          <button id="minBtn" class="window-btn">—</button>
+          <button id="closeBtn" class="window-btn danger">×</button>
+        </div>
+      </header>
+
+      <section id="pageHome" class="page active">
+        <section id="heroCard" class="hero-card detecting">
+          <div class="orb">GPU</div>
+          <div>
+            <h1 id="heroTitle">正在检测控制中心</h1>
+            <p id="heroSub">等待 GCUBridge 服务稳定后开始防护</p>
+          </div>
+        </section>
+
+        <section class="grid two">
+          <article class="card">
+            <div class="card-head">
+              <span>核心状态</span>
+              <i></i>
+            </div>
+            <div class="rows">
+              <div class="row"><span>GCUBridge 服务</span><strong id="svcVal">--</strong></div>
+              <div class="row"><span>GCUService.exe</span><strong id="gcuVal">--</strong></div>
+              <div class="row"><span>GCUUtil.exe</span><strong id="gcuuVal">--</strong></div>
+              <div class="row"><span>管理员权限</span><strong id="adminVal">--</strong></div>
+            </div>
+          </article>
+
+          <article class="card accent-purple">
+            <div class="card-head">
+              <span>本次数据</span>
+              <i></i>
+            </div>
+            <div class="metric-grid">
+              <div class="metric">
+                <span>GPU 修复</span>
+                <strong id="homeFixes">0</strong>
+              </div>
+              <div class="metric">
+                <span>进程拦截</span>
+                <strong id="homeKills">0</strong>
+              </div>
+              <div class="metric wide">
+                <span>运行时间</span>
+                <strong id="homeUptime">00:00:00</strong>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="quick-panel">
+          <div>
+            <h2>快捷操作</h2>
+            <p>常用功能可以直接在这里完成</p>
+          </div>
+          <div class="quick-actions">
+            <button class="primary" data-action="repairNow">立即修复</button>
+            <button class="secondary" data-action="applyAfterburner">重应用小飞机</button>
+            <button class="secondary" data-action="minimizeToTray">最小化到托盘</button>
+          </div>
+        </section>
+      </section>
+
+      <section id="pageStats" class="page">
+        <div class="section-title">
+          <h1>运行统计</h1>
+          <p>查看防护程序本次运行期间的状态</p>
+        </div>
+        <section class="stat-cards">
+          <article class="stat-card green"><span>GPU 超频修复次数</span><strong id="statFixes">0</strong></article>
+          <article class="stat-card blue"><span>进程拦截次数</span><strong id="statKills">0</strong></article>
+          <article class="stat-card purple"><span>运行时间</span><strong id="statUptime">00:00:00</strong></article>
+          <article class="stat-card amber"><span>平均修复 / 小时</span><strong id="statAvg">0.0</strong></article>
+        </section>
+      </section>
+
+      <section id="pageSettings" class="page">
+        <div class="section-title">
+          <h1>设置</h1>
+          <p>路径、启动项和高级防护选项</p>
+        </div>
+
+        <section class="settings-grid">
+          <article class="card path-card">
+            <div class="card-head"><span>MSI Afterburner 路径</span><i></i></div>
+            <code id="abPath">未找到</code>
+            <div class="card-actions">
+              <button class="secondary" data-action="chooseAfterburner">选择</button>
+              <button class="secondary" data-action="applyAfterburner">重应用</button>
+            </div>
+          </article>
+
+          <article class="card path-card accent-blue">
+            <div class="card-head"><span>控制中心路径</span><i></i></div>
+            <code id="ccPath">未找到</code>
+            <div class="card-actions">
+              <button class="secondary" data-action="chooseControlCenter">选择</button>
+              <button class="secondary" data-action="repairNow">立即修复</button>
+            </div>
+          </article>
+
+          <article class="card settings-card accent-purple">
+            <div class="card-head"><span>偏好设置</span><i></i></div>
+            <label class="switch-row">
+              <span>开机自启</span>
+              <input id="autoStartSwitch" type="checkbox" data-setting="autoStart" />
+            </label>
+            <label class="switch-row">
+              <span>开机自动最小化到托盘</span>
+              <input id="bootMinSwitch" type="checkbox" data-setting="bootMin" />
+            </label>
+            <label class="switch-row">
+              <span>关闭窗口时最小化到托盘</span>
+              <input id="minToTraySwitch" type="checkbox" data-setting="minToTray" />
+            </label>
+            <label class="switch-row">
+              <span>兼容旧版强制拦截模式</span>
+              <input id="killProcSwitch" type="checkbox" data-setting="killGpuProcesses" />
+            </label>
+            <p class="hint">不建议开启旧版强制拦截模式，可能导致功耗选项不可调。</p>
+          </article>
+
+          <article class="card settings-card accent-amber">
+            <div class="card-head"><span>数值设置</span><i></i></div>
+            <div class="stepper-row">
+              <span>小飞机 Profile</span>
+              <div>
+                <button data-step="profile" data-delta="-1">−</button>
+                <strong id="profileVal">1</strong>
+                <button data-step="profile" data-delta="1">+</button>
+              </div>
+            </div>
+            <div class="stepper-row">
+              <span>控制中心稳定等待</span>
+              <div>
+                <button data-step="stableSeconds" data-delta="-1">−</button>
+                <strong><span id="stableSecondsVal">15</span>s</strong>
+                <button data-step="stableSeconds" data-delta="1">+</button>
+              </div>
+            </div>
+            <div class="card-actions">
+              <button class="secondary" data-action="openLogDir">打开日志目录</button>
+              <button class="secondary" data-action="openAppDir">打开程序目录</button>
+            </div>
+          </article>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
