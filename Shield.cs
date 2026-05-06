@@ -15,8 +15,8 @@ namespace MROSDShield
 {
     static class AppInfo
     {
-        public const string Version = "1.0.2";
-        public const string PackageName = "MROSDShield-v1.0.2.zip";
+        public const string Version = "1.0.3";
+        public const string PackageName = "MROSDShield-v1.0.3.zip";
     }
 
     static class Program
@@ -173,9 +173,9 @@ namespace MROSDShield
         public static string Det { get { return S("正在检测控制中心", "Detecting control center"); } }
         public static string Act { get { return S("防护已启用", "Protection Active"); } }
         public static string Warn { get { return S("需要注意", "Attention Needed"); } }
-        public static string ActSub { get { return S("GPU 控制进程已被实时屏蔽", "GPU control processes are shielded in real time"); } }
+        public static string ActSub { get { return S("仅锁定 GPU 超频配置，控制中心功耗控制保持可用", "Only GPU OC config is locked; power controls stay available"); } }
         public static string WaitSub { get { return S("等待 GCUBridge 服务稳定后开始防护", "Waiting for GCUBridge to stabilize"); } }
-        public static string WarnSub { get { return S("发现 GPU 控制进程，正在拦截", "GPU control process detected, blocking"); } }
+        public static string WarnSub { get { return S("GPU 超频配置被改动，已修正并重应用小飞机配置", "GPU OC config changed; fixed and reapplied AB profile"); } }
         public static string Svc { get { return S("GCUBridge 服务", "GCUBridge Service"); } }
         public static string Gpu { get { return S("GPU 控制进程", "GPU Control Processes"); } }
         public static string Ses { get { return S("本次拦截", "Session Kills"); } }
@@ -189,6 +189,7 @@ namespace MROSDShield
         public static string Btn { get { return S("最小化到托盘", "Minimize to Tray"); } }
         public static string Run { get { return S("运行中", "Running"); } }
         public static string Blk { get { return S("已屏蔽", "Blocked"); } }
+        public static string Allow { get { return S("已允许", "Allowed"); } }
         public static string Stp { get { return S("已停止", "Stopped"); } }
         public static string NF { get { return S("未找到", "Not Found"); } }
         public static string AR { get { return S("程序已在运行。", "MR OSD Shield is already running."); } }
@@ -218,6 +219,8 @@ namespace MROSDShield
         public static string ApplyAB { get { return S("重应用小飞机配置", "Apply AB Profile"); } }
         public static string RepairNow { get { return S("立即执行防护修复", "Repair Now"); } }
         public static string ABProfile { get { return S("小飞机 Profile", "AB Profile"); } }
+        public static string KillProc { get { return S("强制结束 GPU 控制进程", "Force kill GPU control processes"); } }
+        public static string KillProcHint { get { return S("关闭时保留控制中心功耗调节", "Off keeps control center power controls usable"); } }
         public static string Choose { get { return S("选择", "Choose"); } }
     }
 
@@ -349,14 +352,22 @@ namespace MROSDShield
                     return;
                 }
 
-                if ((DateTime.Now - _lastFileCheck).TotalMilliseconds >= 2200)
+                bool fixedOc = false;
+                if ((DateTime.Now - _lastFileCheck).TotalMilliseconds >= 1200)
                 {
                     _lastFileCheck = DateTime.Now;
-                    if (_hwoc != null && Zero(_hwoc, new[] { "CoreFreqOffset", "MemFreqOffset", "HWOCEnable" })) FileResets++;
-                    if (_mainopt != null && Zero(_mainopt, new[] { "TurboGPUOCOffset", "TurboSilentGPUOCOffset" })) FileResets++;
+                    if (_hwoc != null && Zero(_hwoc, new[] { "CoreFreqOffset", "MemFreqOffset", "HWOCEnable" })) fixedOc = true;
+                    if (_mainopt != null && Zero(_mainopt, new[] { "TurboGPUOCOffset", "TurboSilentGPUOCOffset" })) fixedOc = true;
+                    if (fixedOc)
+                    {
+                        FileResets++;
+                        ReapplyAB();
+                        Log.Info("GPU OC config fixed without blocking control center power services.");
+                    }
                 }
 
-                int k = Kill();
+                int k = 0;
+                if (Pref.KillGpuProcesses) k = Kill();
                 if (k > 0)
                 {
                     _quietTicks = 0;
@@ -401,12 +412,18 @@ namespace MROSDShield
         {
             try
             {
-                int k = Kill();
+                int k = Pref.KillGpuProcesses ? Kill() : 0;
                 if (k > 0) { Blocked += k; TotalBlocked += k; SessionKills += k; }
-                if (_hwoc != null && ZeroFile(_hwoc, new[] { "CoreFreqOffset", "MemFreqOffset", "HWOCEnable" })) FileResets++;
-                if (_mainopt != null && ZeroFile(_mainopt, new[] { "TurboGPUOCOffset", "TurboSilentGPUOCOffset" })) FileResets++;
+                bool fixedOc = false;
+                if (_hwoc != null && ZeroFile(_hwoc, new[] { "CoreFreqOffset", "MemFreqOffset", "HWOCEnable" })) fixedOc = true;
+                if (_mainopt != null && ZeroFile(_mainopt, new[] { "TurboGPUOCOffset", "TurboSilentGPUOCOffset" })) fixedOc = true;
+                if (fixedOc)
+                {
+                    FileResets++;
+                    ReapplyAB();
+                }
                 UpdateStatusCache();
-                Log.Info("Manual repair executed. Kills=" + k);
+                Log.Info("Manual repair executed. Kills=" + k + ", FixedOC=" + fixedOc + ", KillGpuProcesses=" + Pref.KillGpuProcesses);
             }
             catch (Exception ex) { Log.Error("Manual repair failed.", ex); }
         }
@@ -535,7 +552,8 @@ namespace MROSDShield
             s.Blocked = Blocked; s.Total = TotalBlocked; s.SessionKills = SessionKills; s.FileResets = FileResets;
             s.Uptime = DateTime.Now - StartTime;
             s.AllOK = s.SvcRunning;
-            foreach (var kv in s.Procs) if (kv.Value) s.AllOK = false;
+            if (Pref.KillGpuProcesses)
+                foreach (var kv in s.Procs) if (kv.Value) s.AllOK = false;
             lock (_statusLock) _lastStatus = s;
         }
 
@@ -649,6 +667,12 @@ namespace MROSDShield
                 return Math.Max(5, Math.Min(60, v));
             }
             set { WriteValue("StableSeconds", Math.Max(5, Math.Min(60, value)).ToString()); }
+        }
+
+        public static bool KillGpuProcesses
+        {
+            get { return ReadValue("KillGpuProcesses", "false").Equals("true", StringComparison.OrdinalIgnoreCase); }
+            set { WriteValue("KillGpuProcesses", value ? "true" : "false"); }
         }
     }
 
@@ -1117,17 +1141,19 @@ namespace MROSDShield
             var ccChoose = Pill(L.Choose, new Point(570, 174), new Size(120, 32), Co.Blue);
             ccChoose.Click += (s, e) => ChooseControlCenterPath();
             _content.Controls.Add(ccChoose);
-            var c = new GlowCard { Title = L.Quick, Accent = Co.Purple, Size = new Size(548, 194), Location = new Point(0, 252) };
+            var c = new GlowCard { Title = L.Quick, Accent = Co.Purple, Size = new Size(548, 246), Location = new Point(0, 222) };
             _content.Controls.Add(c);
             SettingRow(c, L.AS, 42, AS.On(), (v) => { if (v) AS.Enable(); else AS.Disable(); });
             SettingRow(c, L.BM, 78, Pref.BootMin, (v) => { Pref.BootMin = v; if (AS.On()) AS.Enable(); });
             WaitRow(c, 114);
             SettingRow(c, L.MT, 154, _minToTray, (v) => { _minToTray = v; Pref.MinToTray = v; });
-            PathCard(L.Log, Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), "logs", "mr_osd_shield.log"), 468, Co.Amber);
-            var b1 = Pill(L.OpenLogDir, new Point(570, 468), new Size(120, 32), Co.Amber);
+            SettingRow(c, L.KillProc, 186, Pref.KillGpuProcesses, (v) => { Pref.KillGpuProcesses = v; });
+            c.Controls.Add(new Label { Text = L.KillProcHint, Font = new Font("Microsoft YaHei UI", 7.5f), ForeColor = Co.Dim, BackColor = Color.Transparent, AutoEllipsis = true, Size = new Size(c.Width - 44, 18), Location = new Point(22, 216) });
+            PathCard(L.Log, Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), "logs", "mr_osd_shield.log"), 482, Co.Amber);
+            var b1 = Pill(L.OpenLogDir, new Point(570, 482), new Size(120, 32), Co.Amber);
             b1.Click += (s, e) => OpenFolder(Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), "logs"));
             _content.Controls.Add(b1);
-            var b2 = Pill(L.OpenAppDir, new Point(700, 468), new Size(120, 32), Co.Blue);
+            var b2 = Pill(L.OpenAppDir, new Point(700, 482), new Size(120, 32), Co.Blue);
             b2.Click += (s, e) => OpenFolder(Path.GetDirectoryName(Application.ExecutablePath));
             _content.Controls.Add(b2);
             var b3 = Pill(L.ApplyAB, new Point(570, 510), new Size(120, 32), Co.Green);
@@ -1375,6 +1401,12 @@ namespace MROSDShield
         {
             if (l == null) return;
             bool r = st.Procs.ContainsKey(p) && st.Procs[p];
+            if (!Pref.KillGpuProcesses)
+            {
+                l.Text = r ? L.Run : L.Allow;
+                l.ForeColor = r ? Co.Green : Co.Dim;
+                return;
+            }
             l.Text = r ? L.Run : L.Blk;
             l.ForeColor = r ? Co.Red : Co.Green;
         }
