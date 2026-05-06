@@ -2,7 +2,7 @@
 
 <div align="center">
 
-# MR OSD Shield v1.0.4
+# MR OSD Shield v1.0.5
 
 **机械革命 GPU 控制防护工具**  
 **MECHREVO GPU Control Shield**
@@ -11,7 +11,7 @@
 
 **Author: Sakura**
 
-[![Version](https://img.shields.io/badge/version-v1.0.4-4ade80)](#更新日志)
+[![Version](https://img.shields.io/badge/version-v1.0.5-4ade80)](#更新日志)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-60a5fa)](#系统要求)
 [![Framework](https://img.shields.io/badge/.NET%20Framework-4.x-8b5cf6)](#编译方法)
 [![License](https://img.shields.io/badge/license-MIT-f59e0b)](./LICENSE)
@@ -71,7 +71,7 @@ MR OSD Shield 是一款面向机械革命笔记本用户的轻量级 Windows 桌
 当前版本：
 
 ```text
-v1.0.4
+v1.0.5
 ```
 
 ---
@@ -627,7 +627,7 @@ build-release.bat
 输出示例：
 
 ```text
-MROSDShield-v1.0.4.zip
+MROSDShield-v1.0.5.zip
 ```
 
 发布包不包含本机运行日志。
@@ -814,6 +814,29 @@ https://afdian.com/a/LHY0409
 ---
 
 ## 更新日志
+
+### v1.0.5
+
+- 完美修复拔掉电源 / 切换到电池供电后防护失效的问题
+- 新增 Windows 电源状态变化监听：
+  - 插电切换到电池
+  - 电池切换到插电
+  - 系统挂起 / 恢复
+- 检测到电源状态变化后，会自动延迟重应用 MSI Afterburner Profile，并执行一次防护修复
+- 强化任务计划电源条件修复：
+  - 自动关闭“只在计算机使用交流电源时才启动此任务”
+  - 自动关闭“如果计算机改用电池电源，则停止”
+  - 同时修复 `MR_OSD_Shield` 自启任务和 MSI Afterburner 相关任务
+- 新增 Task Scheduler COM 枚举修复逻辑，解决中文系统下 `schtasks` 输出字段不一致导致小飞机任务识别失败的问题
+- 修复任务计划修复逻辑阻塞主界面的问题：
+  - 主窗口优先显示
+  - 任务计划修复改为后台线程执行
+  - `schtasks` / PowerShell 调用增加超时保护
+- 优化单实例逻辑：
+  - 实例锁从固定名称改为基于程序路径生成，避免不同目录版本互相误判
+  - 重复启动时自动唤醒已有窗口，而不是只提示“程序已在运行”
+  - 修复托盘隐藏或窗口尚未创建时重复启动无法恢复窗口的问题
+- 更新版本号为 `v1.0.5`
 
 ### v1.0.4
 

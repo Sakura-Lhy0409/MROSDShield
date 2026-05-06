@@ -5,7 +5,9 @@ using System.Drawing.Drawing2D;
 using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Security.Principal;
+using Microsoft.Win32;
 using System.ServiceProcess;
 using System.Text;
 using System.Threading;
@@ -15,8 +17,8 @@ namespace MROSDShield
 {
     static class AppInfo
     {
-        public const string Version = "1.0.4";
-        public const string PackageName = "MROSDShield-v1.0.4.zip";
+        public const string Version = "1.0.5";
+        public const string PackageName = "MROSDShield-v1.0.5.zip";
     }
 
     static class Program
@@ -247,7 +249,7 @@ namespace MROSDShield
     {
         static readonly string[] PROCS = { "GCUService", "GCUUtil" };
         string _abPath, _ccBase, _hwoc, _mainopt;
-        System.Threading.Timer _tmr;
+        System.Threading.Timer _tmr, _powerTmr;
         volatile bool _run, _done, _ready, _ccFS;
         int _quietTicks;
         readonly object _statusLock = new object();
@@ -292,6 +294,26 @@ namespace MROSDShield
         {
             _run = false;
             if (_tmr != null) { _tmr.Dispose(); _tmr = null; }
+            if (_powerTmr != null) { _powerTmr.Dispose(); _powerTmr = null; }
+        }
+
+        public void OnPowerModeChanged(PowerModes mode)
+        {
+            try
+            {
+                Log.Info("Power mode changed: " + mode + ". Scheduling MSI Afterburner profile reapply and repair.");
+                if (_powerTmr != null) _powerTmr.Dispose();
+                _powerTmr = new System.Threading.Timer(s =>
+                {
+                    try
+                    {
+                        ReapplyAB();
+                        RepairNow();
+                    }
+                    catch (Exception ex) { Log.Error("Power mode repair failed.", ex); }
+                }, null, 2500, Timeout.Infinite);
+            }
+            catch (Exception ex) { Log.Error("Handle power mode change failed.", ex); }
         }
 
         public void SetAfterburnerPath(string path)
@@ -718,16 +740,41 @@ namespace MROSDShield
     static class AS
     {
         const string TN = "MR_OSD_Shield";
-        static string R(string a)
+        static string RunProcess(string fileName, string args)
         {
             try
             {
-                var p = Process.Start(new ProcessStartInfo("schtasks.exe", a) { CreateNoWindow = true, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true });
-                string o = p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd();
-                p.WaitForExit(5000);
-                return o;
+                var p = Process.Start(new ProcessStartInfo(fileName, args) { CreateNoWindow = true, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true });
+                if (p == null) return "";
+                if (!p.WaitForExit(8000))
+                {
+                    try { p.Kill(); } catch { }
+                    return "TIMEOUT";
+                }
+                return p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd();
             }
             catch { return ""; }
+        }
+
+        static string R(string a)
+        {
+            return RunProcess("schtasks.exe", a);
+        }
+
+        static string PS(string script)
+        {
+            string tmp = "";
+            try
+            {
+                tmp = Path.Combine(Path.GetTempPath(), "mr_osd_ps_" + Guid.NewGuid().ToString("N") + ".ps1");
+                File.WriteAllText(tmp, script, Encoding.UTF8);
+                return RunProcess("powershell.exe", "-NoProfile -ExecutionPolicy Bypass -File " + Q(tmp));
+            }
+            catch { return ""; }
+            finally
+            {
+                try { if (tmp.Length > 0 && File.Exists(tmp)) File.Delete(tmp); } catch { }
+            }
         }
 
         static string Q(string s) { return "\"" + s.Replace("\"", "\"\"") + "\""; }
@@ -761,20 +808,68 @@ namespace MROSDShield
             try
             {
                 string tmp = Path.Combine(Path.GetTempPath(), "mr_osd_task_" + Guid.NewGuid().ToString("N") + ".xml");
-                string xml = R("/query /tn " + Q(taskName) + " /xml");
-                int i = xml.IndexOf("<?xml", StringComparison.OrdinalIgnoreCase);
-                if (i > 0) xml = xml.Substring(i);
-                if (xml.IndexOf("<Task", StringComparison.OrdinalIgnoreCase) < 0) return;
-                xml = SetXmlBool(xml, "DisallowStartIfOnBatteries", false);
-                xml = SetXmlBool(xml, "StopIfGoingOnBatteries", false);
-                xml = SetXmlBool(xml, "AllowHardTerminate", false);
-                xml = SetXmlBool(xml, "StartWhenAvailable", true);
-                File.WriteAllText(tmp, xml, Encoding.Unicode);
-                string output = R("/create /tn " + Q(taskName) + " /xml " + Q(tmp) + " /ru " + Q(CurrentUser()) + " /f");
-                Log.Info("Fixed task power conditions: " + taskName + ". Output=" + output.Replace(Environment.NewLine, " "));
-                try { File.Delete(tmp); } catch { }
+                try
+                {
+                    string xml = R("/query /tn " + Q(taskName) + " /xml");
+                    int i = xml.IndexOf("<?xml", StringComparison.OrdinalIgnoreCase);
+                    if (i > 0) xml = xml.Substring(i);
+                    if (xml.IndexOf("<Task", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        xml = SetXmlBool(xml, "DisallowStartIfOnBatteries", false);
+                        xml = SetXmlBool(xml, "StopIfGoingOnBatteries", false);
+                        xml = SetXmlBool(xml, "AllowHardTerminate", false);
+                        xml = SetXmlBool(xml, "StartWhenAvailable", true);
+                        File.WriteAllText(tmp, xml, Encoding.Unicode);
+                        string output = R("/create /tn " + Q(taskName) + " /xml " + Q(tmp) + " /ru " + Q(CurrentUser()) + " /f");
+                        Log.Info("Fixed task power conditions by XML: " + taskName + ". Output=" + output.Replace(Environment.NewLine, " "));
+                    }
+                }
+                finally
+                {
+                    try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+                }
+
+                string psOutput = FixPowerConditionsByCom(taskName);
+                Log.Info("Fixed task power conditions by COM: " + taskName + ". Output=" + psOutput.Replace(Environment.NewLine, " "));
             }
             catch (Exception ex) { Log.Error("Fix task power conditions failed: " + taskName, ex); }
+        }
+
+        static string FixPowerConditionsByCom(string taskName)
+        {
+            string safeTaskName = taskName.Replace("'", "''");
+            string script =
+@"$ErrorActionPreference = 'Stop'
+$svc = New-Object -ComObject Schedule.Service
+$svc.Connect()
+$name = '" + safeTaskName + @"'
+$path = '\'
+if ($name.Contains('\')) {
+    $idx = $name.LastIndexOf('\')
+    $path = $name.Substring(0, $idx + 1)
+    $name = $name.Substring($idx + 1)
+    if ([string]::IsNullOrWhiteSpace($path)) { $path = '\' }
+}
+$folder = $svc.GetFolder($path)
+$task = $folder.GetTask($name)
+$def = $task.Definition
+$def.Settings.DisallowStartIfOnBatteries = $false
+$def.Settings.StopIfGoingOnBatteries = $false
+$def.Settings.StartWhenAvailable = $true
+$def.Settings.AllowHardTerminate = $false
+$folder.RegisterTaskDefinition($name, $def, 6, $null, $null, 3) | Out-Null
+'OK'";
+            return PS(script);
+        }
+
+        public static void FixSelfAndAfterburnerPowerConditions()
+        {
+            try
+            {
+                if (On()) FixPowerConditions(TN);
+                FixAfterburnerPowerConditions();
+            }
+            catch (Exception ex) { Log.Error("Fix startup task power conditions failed.", ex); }
         }
 
         public static void FixAfterburnerPowerConditions()
@@ -801,8 +896,51 @@ namespace MROSDShield
                     if (task.Length > 0 && task.IndexOf("\\Microsoft\\", StringComparison.OrdinalIgnoreCase) < 0 && run.IndexOf("MSIAfterburner", StringComparison.OrdinalIgnoreCase) >= 0)
                         FixPowerConditions(task);
                 }
+
+                string psOutput = FixAfterburnerPowerConditionsByCom();
+                Log.Info("Fixed MSI Afterburner task power conditions by COM enumeration. Output=" + psOutput.Replace(Environment.NewLine, " "));
             }
             catch (Exception ex) { Log.Error("Fix MSI Afterburner task power conditions failed.", ex); }
+        }
+
+        static string FixAfterburnerPowerConditionsByCom()
+        {
+            string script =
+@"$ErrorActionPreference = 'Stop'
+$svc = New-Object -ComObject Schedule.Service
+$svc.Connect()
+
+function Fix-Folder($folder) {
+    foreach ($task in $folder.GetTasks(0)) {
+        $hit = $false
+        foreach ($action in $task.Definition.Actions) {
+            try {
+                $p = [string]$action.Path
+                $a = [string]$action.Arguments
+                if (($p + ' ' + $a).IndexOf('MSIAfterburner', [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                    $hit = $true
+                }
+            } catch {}
+        }
+
+        if ($hit) {
+            $def = $task.Definition
+            $def.Settings.DisallowStartIfOnBatteries = $false
+            $def.Settings.StopIfGoingOnBatteries = $false
+            $def.Settings.StartWhenAvailable = $true
+            $def.Settings.AllowHardTerminate = $false
+            $folder.RegisterTaskDefinition($task.Name, $def, 6, $null, $null, 3) | Out-Null
+            Write-Output ('Fixed: ' + $task.Path)
+        }
+    }
+
+    foreach ($sub in $folder.GetFolders(0)) {
+        Fix-Folder $sub
+    }
+}
+
+Fix-Folder $svc.GetFolder('\')";
+            return PS(script);
         }
 
         static string SetXmlBool(string xml, string name, bool value)
@@ -1465,6 +1603,15 @@ namespace MROSDShield
             Program.TrimMemory();
         }
 
+        public void ActivateFromExternalInstance()
+        {
+            if (_exiting) return;
+            RestoreFromTray();
+            BringToFront();
+            TopMost = true;
+            TopMost = false;
+        }
+
         void RestoreFromTray()
         {
             if (_exiting) return;
@@ -1533,22 +1680,105 @@ namespace MROSDShield
 
     class App
     {
-        Engine _e; Mutex _m;
+        Engine _e;
+        Mutex _m;
+        EventWaitHandle _activateEvent;
+        Thread _activateThread;
+        MainForm _form;
+        volatile bool _running, _pendingActivate;
+
         public void Run(bool min)
         {
             bool c;
-            _m = new Mutex(true, "MR_OSD_Shield_v3", out c);
-            if (!c) { MessageBox.Show(L.AR, L.T, MessageBoxButtons.OK, MessageBoxIcon.Information); return; }
-            Log.Info("App run. StartMinimized=" + min);
+            string instanceName = "MR_OSD_Shield_" + InstanceId();
+            _m = new Mutex(true, instanceName, out c);
+            if (!c)
+            {
+                SignalExistingInstance(instanceName);
+                Log.Info("Another instance is already running. Activation signal sent.");
+                return;
+            }
+
+            Log.Info("App run. StartMinimized=" + min + ", Instance=" + instanceName);
             if (!Program.IsAdmin()) Log.Info("Application is not running as administrator.");
+
+            _running = true;
+            _activateEvent = new EventWaitHandle(false, EventResetMode.AutoReset, instanceName + "_Activate");
+            _activateThread = new Thread(() =>
+            {
+                while (_running)
+                {
+                    try
+                    {
+                        _activateEvent.WaitOne();
+                        if (!_running) break;
+                        var f = _form;
+                        if (f != null && !f.IsDisposed)
+                            f.BeginInvoke(new Action(() => f.ActivateFromExternalInstance()));
+                        else
+                            _pendingActivate = true;
+                    }
+                    catch { }
+                }
+            });
+            _activateThread.IsBackground = true;
+            _activateThread.Start();
+
             _e = new Engine();
             _e.StartEngine();
-            AS.FixAfterburnerPowerConditions();
-            var f = new MainForm(_e, min);
-            Application.Run(f);
-            _e.Stop();
+            SystemEvents.PowerModeChanged += OnPowerModeChanged;
+            _form = new MainForm(_e, min);
+            if (_pendingActivate)
+                _form.BeginInvoke(new Action(() => _form.ActivateFromExternalInstance()));
+
+            var taskFixThread = new Thread(() =>
+            {
+                try { AS.FixSelfAndAfterburnerPowerConditions(); }
+                catch (Exception ex) { Log.Error("Background task power condition fix failed.", ex); }
+            });
+            taskFixThread.IsBackground = true;
+            taskFixThread.Start();
+
+            Application.Run(_form);
+            SystemEvents.PowerModeChanged -= OnPowerModeChanged;
+
+            _running = false;
+            try { if (_activateEvent != null) _activateEvent.Set(); } catch { }
+            if (_e != null) _e.Stop();
+            if (_activateEvent != null) { _activateEvent.Dispose(); _activateEvent = null; }
             Log.Info("Application exited.");
             if (_m != null) _m.ReleaseMutex();
+        }
+
+        static void SignalExistingInstance(string instanceName)
+        {
+            try
+            {
+                using (var ev = EventWaitHandle.OpenExisting(instanceName + "_Activate"))
+                    ev.Set();
+            }
+            catch { }
+        }
+
+        static string InstanceId()
+        {
+            try
+            {
+                string path = Application.ExecutablePath.ToLowerInvariant();
+                using (var md5 = MD5.Create())
+                {
+                    byte[] hash = md5.ComputeHash(Encoding.UTF8.GetBytes(path));
+                    var sb = new StringBuilder();
+                    for (int i = 0; i < hash.Length; i++) sb.Append(hash[i].ToString("x2"));
+                    return sb.ToString();
+                }
+            }
+            catch { return "Default"; }
+        }
+
+        void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
+        {
+            if (_e != null) _e.OnPowerModeChanged(e.Mode);
         }
     }
 }
