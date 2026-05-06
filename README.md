@@ -2,17 +2,17 @@
 
 <div align="center">
 
-# MR OSD Shield v1.0.5
+# MR OSD Shield v1.0.6
 
 **机械革命 GPU 控制防护工具**  
 **MECHREVO GPU Control Shield**
 
 让 MSI Afterburner 的 GPU 超频配置保持稳定，同时尽量保留机械革命控制中心的功耗调节能力。  
-`v1.0.5` 已强化拔电 / 电池供电场景防护，断电切换后会自动重应用小飞机配置，避免 GPU 参数掉失。
+`v1.0.6` 重大更新：全新现代化 WebView2 界面，新增电源计划自动切换和锁定最佳性能模式功能，优化项目结构为开源发布做好准备。
 
 **Author: Sakura**
 
-[![Version](https://img.shields.io/badge/version-v1.0.5-4ade80)](#更新日志)
+[![Version](https://img.shields.io/badge/version-v1.0.6-4ade80)](#更新日志)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-60a5fa)](#系统要求)
 [![Framework](https://img.shields.io/badge/.NET-8.0-8b5cf6)](#编译方法)
 [![License](https://img.shields.io/badge/license-MIT-f59e0b)](./LICENSE)
@@ -74,7 +74,7 @@ MR OSD Shield 是一款面向机械革命笔记本用户的轻量级 Windows 桌
 当前版本：
 
 ```text
-v1.0.5
+v1.0.6
 ```
 
 ---
@@ -509,7 +509,7 @@ KillGpuProcesses=false
 | **机械革命控制中心** | 必需 | 程序监控的目标软件 |
 | **MSI Afterburner** | 推荐 | 不安装也可运行，但无法重应用 Profile |
 | **.NET 8.0 Runtime** | 必需 | [下载地址](https://dotnet.microsoft.com/download/dotnet/8.0) |
-| **WebView2 Runtime** | 必需 | Windows 11 自带，Windows 10 需手动安装 |
+| **WebView2 Runtime** | 必需 | 用于渲染程序界面，Windows 11 自带，Windows 10 需手动安装 |
 
 ### 硬件要求
 
@@ -517,13 +517,15 @@ KillGpuProcesses=false
 - **显卡**：NVIDIA 独立显卡（支持 MSI Afterburner）
 - **处理器**：无特殊要求
 
-### 说明
+### 技术架构说明
 
-- 没有安装 MSI Afterburner 时，程序仍可运行
-- 未找到 MSI Afterburner 时，会跳过自动重应用 Profile
-- GPU 配置修复逻辑仍然生效
+- **界面技术**：WinForms 窗体 + Microsoft Edge WebView2 控件 + HTML/CSS/JavaScript 前端
+- **后端逻辑**：.NET 8.0 C# 实现核心防护引擎
+- **前后端通信**：通过 WebView2 的 `PostWebMessageAsJson` 和 `WebMessageReceived` 进行双向消息传递
+- 没有安装 MSI Afterburner 时，程序仍可运行，但会跳过自动重应用 Profile
+- GPU 配置修复逻辑不依赖 MSI Afterburner，仍然生效
 - 部分操作如创建任务计划、结束进程、写入控制中心配置需要管理员权限
-- WebView2 Runtime 用于渲染程序界面，Windows 11 系统自带
+- WebView2 Runtime 是 Microsoft Edge 浏览器内核，Windows 11 系统自带，Windows 10 需手动安装
 
 ---
 
@@ -899,6 +901,41 @@ https://afdian.com/a/LHY0409
 
 ## 更新日志
 
+### v1.0.6
+
+- **全新现代化界面**
+  - 采用 WebView2 + HTML/CSS/JavaScript 技术栈重构界面
+  - 精致优雅的深色主题设计，告别旧版简陋的原生 WinForms 界面
+  - 流畅的动画效果和现代化交互体验
+  - 响应式布局，自适应窗口大小
+  - 自定义发光卡片控件和开关控件
+  
+- **新增电源计划管理功能**（v1.0.5 及之前版本不具备）
+  - 电源计划自动切换：根据指定进程运行状态自动切换电源计划
+  - 锁定最佳性能模式：强制锁定 Windows 电源计划为最佳性能，防止控制中心切换
+  - 智能识别最佳性能计划：自动查找"卓越性能"、"高性能"等电源计划
+  - Process Lasso 检测：检测到 Process Lasso 时自动跳过电源计划切换，避免冲突
+  - 电源计划下拉选择：可视化选择"检测到进程时"和"未检测到进程时"的电源计划
+  - 实时状态显示：显示当前激活的电源计划和期望的电源计划
+  
+- **修复电源计划读取问题**
+  - 修复 `powercfg` 命令输出编码导致电源计划无法读取的问题
+  - 实现编码容错机制：优先使用 GBK (936)，失败时回退到系统默认编码
+  - 解决中文电源计划名称显示乱码的问题
+  - 增强日志记录，显示实际使用的编码信息
+  
+- **项目结构优化**
+  - 完全重构项目组织结构，为开源发布做好准备
+  - 创建规范的 `.gitignore` 文件，排除编译输出和临时文件
+  - 新增 `PROJECT_STRUCTURE.md` 详细说明项目架构和模块职责
+  - 清理项目根目录，移除所有编译产物
+  - 优化文件组织，源码按后端、前端、基础设施分层
+  - 规范化文档说明和编译发布流程
+  
+- 更新版本号为 `v1.0.6`
+
+---
+
 ### v1.0.5
 
 - 完美修复拔掉电源 / 切换到电池供电后防护失效的问题
@@ -1004,5 +1041,7 @@ https://afdian.com/a/LHY0409
 - GPU 控制进程防护
 - 控制中心配置修正
 - MSI Afterburner Profile 1 重应用
-- WinForms 深色界面
+- 原生 WinForms 深色界面
 - 托盘常驻和开机自启
+
+**注**：v1.0.0 使用原生 WinForms 控件绘制界面。后续版本已升级为 WebView2 + HTML/CSS/JS 现代化界面，提供更好的视觉效果和交互体验。如需使用新界面，请重新编译源码或下载最新发布版本。
