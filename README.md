@@ -2,17 +2,17 @@
 
 <div align="center">
 
-# MR OSD Shield v1.0.7
+# MR OSD Shield v1.0.8
 
 **机械革命 GPU 控制防护工具**  
 **MECHREVO GPU Control Shield**
 
 让 MSI Afterburner 的 GPU 超频配置保持稳定，同时尽量保留机械革命控制中心的功耗调节能力。  
-`v1.0.7` 重大更新：深度内存优化，大幅降低后台内存占用和 CPU 使用率，修复内存泄漏问题，目标内存占用约 10MB。
+`v1.0.8` 修复电源计划无法显示的 bug，确保电源计划管理功能正常工作。
 
 **Author: Sakura**
 
-[![Version](https://img.shields.io/badge/version-v1.0.7-4ade80)](#更新日志)
+[![Version](https://img.shields.io/badge/version-v1.0.8-4ade80)](#更新日志)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-60a5fa)](#系统要求)
 [![Framework](https://img.shields.io/badge/.NET-8.0-8b5cf6)](#编译方法)
 [![License](https://img.shields.io/badge/license-MIT-f59e0b)](./LICENSE)
@@ -900,6 +900,28 @@ https://afdian.com/a/LHY0409
 ---
 
 ## 更新日志
+
+### v1.0.8
+
+- **修复电源计划无法显示的关键 Bug**
+  - 修复 `ParsePowerPlanLine` 方法中的括号解析错误：将 `IndexOf` 改为 `LastIndexOf` 查找右括号
+  - 解决电源计划名称格式如 "(ayo) *" 时解析失败的问题
+  - 修复 `UpdateStatusCache` 方法未将 `_powerPlans` 复制到 `_lastStatus.PowerPlans` 的问题
+  - 确保前端能够正确接收并显示电源计划列表
+  
+- **电源计划数据传输修复**
+  - 在 `UpdateStatusCache()` 中添加电源计划列表复制逻辑
+  - 使用 `foreach` 循环将 `_powerPlans` 中的每个计划复制到 `_lastStatus.PowerPlans`
+  - 确保 StatusInfo 对象包含完整的电源计划数据供前端使用
+  
+- **问题根源分析**
+  - 电源计划 GUID 和名称解析正常，但未传递给前端
+  - `_powerPlans` 列表已正确填充，但 `_lastStatus.PowerPlans` 为空
+  - 前端下拉框因接收到空列表而显示"未获取电源计划"
+  
+- 更新版本号为 `v1.0.8`
+
+---
 
 ### v1.0.7
 
