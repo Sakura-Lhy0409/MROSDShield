@@ -2,17 +2,17 @@
 
 <div align="center">
 
-# MR OSD Shield v1.0.8
+# MR OSD Shield v1.1
 
 **机械革命 GPU 控制防护工具**  
 **MECHREVO GPU Control Shield**
 
 让 MSI Afterburner 的 GPU 超频配置保持稳定，同时尽量保留机械革命控制中心的功耗调节能力。  
-`v1.0.8` 修复电源计划无法显示的 bug，确保电源计划管理功能正常工作。
+`v1.1` 是一次完整的大版本更新：在保留原有 GPU 防护能力的基础上，正式补齐了**控制中心性能模式联动**、**多进程电源计划绑定**、**中文电源计划识别修复**、**GCUBridge 服务状态修复**以及**界面交互稳定性修复**，使整套联动逻辑更适合日常长期后台使用。
 
 **Author: Sakura**
 
-[![Version](https://img.shields.io/badge/version-v1.0.8-4ade80)](#更新日志)
+[![Version](https://img.shields.io/badge/version-v1.1-4ade80)](#更新日志)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-60a5fa)](#系统要求)
 [![Framework](https://img.shields.io/badge/.NET-8.0-8b5cf6)](#编译方法)
 [![License](https://img.shields.io/badge/license-MIT-f59e0b)](./LICENSE)
@@ -74,7 +74,7 @@ MR OSD Shield 是一款面向机械革命笔记本用户的轻量级 Windows 桌
 当前版本：
 
 ```text
-v1.0.7
+v1.1
 ```
 
 ---
@@ -182,7 +182,7 @@ GCUUtil.exe
 MSIAfterburner.exe -profileN
 ```
 
-其中 `N` 由配置项 `AfterburnerProfile` 决定，默认是 `1`。
+其中 `N` 默认由配置项 `AfterburnerProfile` 决定，默认是 `1`。如果开启了 `BatteryProfileSwitch` 且当前处于离电 / 电池供电状态，则会改用 `BatteryAfterburnerProfile`。
 
 ---
 
@@ -222,6 +222,32 @@ MR OSD Shield 会自动：
 2. 执行一次 GPU 配置防护修复
 3. 修复任务计划中的电池电源限制
 4. 尽量避免小飞机 GPU 参数在拔电后掉失
+
+从 `v1.0.9` 开始，设置页新增：
+
+```text
+离电自动切换 Profile
+离电 Profile
+当前供电
+当前生效 Profile
+```
+
+开启“离电自动切换 Profile”后，当系统检测到笔记本处于电池供电 / 离电状态时，会自动使用独立的 `BatteryAfterburnerProfile` 配置；接入交流电源时则恢复使用普通的 `AfterburnerProfile` 配置。
+
+示例：
+
+```text
+小飞机 Profile = 1
+离电自动切换 Profile = 开启
+离电 Profile = 3
+```
+
+此时：
+
+```text
+接入电源 → 自动应用 MSIAfterburner.exe -profile1
+拔掉电源 → 自动应用 MSIAfterburner.exe -profile3
+```
 
 同时程序会自动修复 `MR_OSD_Shield` 和 MSI Afterburner 相关任务计划，关闭：
 
@@ -472,6 +498,17 @@ MinToTray=true
 AfterburnerProfile=1
 AfterburnerPath=
 ControlCenterPath=
+BatteryProfileSwitch=false
+BatteryAfterburnerProfile=1
+ControlModeLinkEnabled=false
+ControlMode1PowerPlan=
+ControlMode2PowerPlan=
+ControlMode3PowerPlan=
+ControlMode4PowerPlan=
+ControlMode1AfterburnerProfile=1
+ControlMode2AfterburnerProfile=1
+ControlMode3AfterburnerProfile=1
+ControlMode4AfterburnerProfile=1
 KillGpuProcesses=false
 ```
 
@@ -485,6 +522,11 @@ KillGpuProcesses=false
 | `AfterburnerProfile` | `1` | MSI Afterburner Profile 编号，范围 `1~5` |
 | `AfterburnerPath` | 空 | 可选，自定义 MSI Afterburner 路径 |
 | `ControlCenterPath` | 空 | 可选，自定义机械革命控制中心路径 |
+| `BatteryProfileSwitch` | `false` | 是否开启离电自动切换 MSI Afterburner Profile |
+| `BatteryAfterburnerProfile` | `1` | 离电 / 电池供电时使用的 MSI Afterburner Profile 编号，范围 `1~5` |
+| `ControlModeLinkEnabled` | `false` | 是否启用控制中心性能模式联动 |
+| `ControlMode1PowerPlan` ~ `ControlMode4PowerPlan` | 空 | 控制中心 `OperatingMode 1 ~ 4` 对应模式（办公、均衡、狂暴、自定义）分别绑定的 Windows 电源计划 GUID，留空表示该模式不联动电源计划 |
+| `ControlMode1AfterburnerProfile` ~ `ControlMode4AfterburnerProfile` | `1` | 控制中心 `OperatingMode 1 ~ 4` 对应模式（办公、均衡、狂暴、自定义）分别绑定的 MSI Afterburner Profile 编号，范围 `1~5` |
 | `KillGpuProcesses` | `false` | 是否启用兼容旧版强制拦截模式；开启后可能导致功耗选项不可调 |
 
 ---
@@ -561,6 +603,25 @@ Profile 1
 
 ```text
 1 ~ 5
+```
+
+如果你希望笔记本拔掉电源后自动切换到另一套小飞机配置，可以在设置页打开：
+
+```text
+离电自动切换 Profile
+```
+
+然后调整：
+
+```text
+离电 Profile
+```
+
+程序会根据当前供电状态自动选择生效配置：
+
+```text
+接入电源：使用“小飞机 Profile”
+离电 / 电池供电：使用“离电 Profile”
 ```
 
 ---
@@ -693,7 +754,7 @@ build-release.bat
 输出示例：
 
 ```text
-MROSDShield-v1.0.5.zip
+MROSDShield-v1.1.zip
 ```
 
 发布包不包含本机运行日志。
@@ -900,6 +961,104 @@ https://afdian.com/a/LHY0409
 ---
 
 ## 更新日志
+
+### v1.1
+
+- **发布版本升级**
+  - 正式发布版本号升级为 `v1.1`
+  - 程序内部版本、前端显示版本、打包文件名、README 文档版本号全部统一更新为 `1.1`
+
+- **修复控制中心性能模式联动电源计划不生效**
+  - 修复检测到 `Process Lasso` 后错误拦截“控制中心性能模式联动”电源计划切换的问题
+  - 现在 `Process Lasso` 仅暂停“按目标进程自动切换电源计划”，不会再阻断“控制中心性能模式联动”
+  - 小飞机 Profile 联动与电源计划联动优先级逻辑重新校正，控制中心模式绑定行为更加符合预期
+
+- **修复电源计划中文乱码**
+  - 不再单纯依赖 `powercfg /list` 文本解析电源计划名称
+  - 改为优先通过 `PowerShell + CIM (Win32_PowerPlan)` 读取电源计划 GUID 与名称
+  - 修复中文系统中“平衡”“高性能”“自定义电源计划”等名称乱码问题
+
+- **修复 GCUBridge 服务误报“未找到”**
+  - 修复软件内部对 `GCUBridge` 服务状态检测失真，导致前端明明服务正在运行却显示“未找到”的问题
+  - 改进 GCUBridge 服务状态采集链路，使首页、状态页和防护引擎判断保持一致
+
+- **修复软件无法启动**
+  - 补齐 `WebView2Loader.dll` 运行依赖
+  - 修复重新部署后程序因 WebView2 Loader 缺失导致无法打开的问题
+
+- **电源计划自动切换交互大幅优化**
+  - 新增“选择 EXE 文件”“打开文件夹批量选择”“清空列表”
+  - 现在可直接从程序目录选择一个或多个 `.exe`
+  - 多进程绑定策略改为：**命中任意一个进程即触发切换**
+  - 自动去重并规范化目标进程名，减少手动输入错误
+
+- **修复保存前被轮询状态覆盖**
+  - 修复“电源计划自动切换”界面中，修改设置后尚未点击保存就被 3 秒状态刷新覆盖的问题
+  - 修复“控制中心性能模式联动”界面中，小飞机 Profile / 电源计划 / 总开关还没保存就被后端状态回填覆盖的问题
+  - 新增本地草稿与待保存状态，只有点击保存后才真正写入后端配置
+
+- **文档更新**
+  - README 软件介绍、版本信息、更新日志、发布打包示例已同步更新
+  - 当前文档内容与 `v1.1` 发布版本保持一致
+
+---
+
+### v1.0.10
+
+- **新增控制中心性能模式联动**
+  - 新增“控制中心性能模式联动”总开关，默认关闭，由用户手动决定是否启用
+  - 自动检测机械革命控制中心 `MainOption.json` 中的 `OperatingMode`，并对 4 个实际模式分别建立联动规则
+  - 当前已按用户机器上的控制中心实际选项映射为：`1=办公`、`2=均衡`、`3=狂暴`、`4=自定义`
+  - 每个模式可单独绑定一个 Windows 电源计划，也可单独绑定一个 MSI Afterburner Profile
+  - 未配置绑定项时会自动回退到原有逻辑，不影响现有使用方式
+
+- **联动优先级与兼容逻辑完善**
+  - 当启用性能模式联动且当前模式存在绑定时，对应模式绑定的电源计划会优先于原有按进程自动切换电源计划逻辑
+  - 对应模式绑定的 MSI Afterburner Profile 会优先于普通 Profile 与离电 Profile 逻辑
+  - “锁定最佳性能模式”仍保持最高优先级，避免与已有强制锁定行为冲突
+  - 与现有离电自动切换 Profile、电源计划自动切换、防护修复逻辑保持兼容
+
+- **界面与状态展示同步更新**
+  - 设置页新增控制中心性能模式联动配置区域，可直接为办公、均衡、狂暴、自定义 4 个模式分别设置电源计划和小飞机 Profile
+  - 新增当前控制中心模式与联动状态显示，便于确认实时生效情况
+  - 所有新增 UI 均复用现有卡片、下拉框、开关、配色和全局样式，保持与当前界面风格一致
+
+- **配置项更新**
+  - 新增 `ControlModeLinkEnabled=false`
+  - 新增 `ControlMode1PowerPlan` ~ `ControlMode4PowerPlan`（分别对应办公、均衡、狂暴、自定义）
+  - 新增 `ControlMode1AfterburnerProfile=1` ~ `ControlMode4AfterburnerProfile=1`（分别对应办公、均衡、狂暴、自定义）
+
+- 更新版本号为 `v1.0.10`
+
+---
+
+### v1.0.9
+
+- **新增离电自动切换 MSI Afterburner Profile**
+  - 新增“离电自动切换 Profile”开关，可在笔记本拔掉电源后自动启用独立的小飞机 Profile
+  - 新增“离电 Profile”数值设置，支持 `Profile 1 ~ Profile 5`
+  - 接入交流电源时继续使用原有“小飞机 Profile”
+  - 离电 / 电池供电时自动切换为 `BatteryAfterburnerProfile`
+  - 电源状态切换、系统挂起 / 恢复后会自动重新计算当前生效 Profile 并重应用
+
+- **新增供电状态与生效 Profile 显示**
+  - 设置页新增“当前供电”，实时显示“接入电源 / 离电 / 未知”
+  - 设置页新增“当前生效 Profile”，方便确认当前实际应用的小飞机配置
+  - 首页进程状态中的 MSI Afterburner 行同步显示当前生效 Profile 和供电状态
+
+- **保持现有 UI 风格一致**
+  - 新功能 UI 放置在现有“数值设置”卡片内
+  - 复用项目已有的开关、步进器、信息行、卡片和全局配色样式
+  - 未引入割裂的新控件样式，保持与当前 WebView2 深色界面统一
+
+- **配置项更新**
+  - 新增 `BatteryProfileSwitch=false`
+  - 新增 `BatteryAfterburnerProfile=1`
+  - 保持原有 `AfterburnerProfile` 配置兼容
+
+- 更新版本号为 `v1.0.9`
+
+---
 
 ### v1.0.8
 
